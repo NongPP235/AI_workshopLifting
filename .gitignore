@@ -60,3 +60,5 @@ build/
 /browser-package.json
 /opencv-browser.js
 /browser-port-fixture.json
+/netlify-browser-v2.zip
+/browser-corrupt.mp4
