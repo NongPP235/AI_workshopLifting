@@ -2,4 +2,14 @@
   base = "static"
   publish = "."
 
-# Frontend only. The Python analysis API must be deployed separately.
+# Version 2 performs analysis entirely in browser Web Workers.
+
+[[headers]]
+  for = "/runtime/*.wasm"
+  [headers.values]
+    Content-Type = "application/wasm"
+
+[[headers]]
+  for = "/*.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"

@@ -1,3 +1,31 @@
+# เว็บวิเคราะห์การยกของ · Version 2 Browser
+
+รุ่นปัจจุบันรันบน Netlify ได้โดยไม่ต้องมี backend Python, Render หรือ Docker วิดีโอประมวลผลในเครื่องผู้ใช้ด้วย MediaPipe Pose Landmarker Lite และ OpenCV WebAssembly
+
+## Deploy Netlify
+
+เชื่อม GitHub repository และ branch main ใช้ netlify.toml ที่รวมไว้: Base directory `static`, Publish directory `.`, ไม่ต้องมี Build command หรือ API URL หาก deploy แบบลากโฟลเดอร์ ให้นำโฟลเดอร์ static ทั้งหมดรวม runtime ไป deploy
+
+## วิธีใช้
+
+เปิดด้วย Chrome/Edge รุ่นปัจจุบัน เลือก MP4 H.264 กรอกส่วนสูงจริง และกดวิเคราะห์ ต้องเห็นทั้งตัวและยืนนิ่งใน 1.5 วินาทีแรก โหลดโมเดลและ WASM ครั้งแรกประมาณ 56 MB ส่วนสูง S01=165, S02=183, S03=180, S04=178, S05=173 ซม.
+
+ดาวน์โหลด CSV และวิดีโอพร้อมโครงร่าง/ตารางน้ำหนักได้ การส่งออกวิดีโอใช้เวลาประมาณความยาวคลิป ต้องเปิดแท็บไว้ ไม่มีเสียงต้นฉบับ และชนิด MP4/WebM ขึ้นกับเบราว์เซอร์ ผลลัพธ์อยู่ในหน่วยความจำและหายเมื่อรีเฟรช ควรดาวน์โหลดก่อนปิดหน้า
+
+## โมเดลและข้อจำกัด
+
+พอร์ต Kalman smoothing, calibration, solvePnP, H/V, มุมบิดตัว และตารางน้ำหนักจาก notebook เป็น JavaScript ใช้ Lite model เดียวกัน นับเมื่อมือยกขึ้น 20 ซม. และล็อกจนกลับลงครบรอบ การก้มโดยไม่มีวัตถุอาจถูกนับได้ การตรวจท่าทางบนเบราว์เซอร์มีความต่างจาก Python ดู BROWSER_TEST_REPORT.md
+
+MOV/WebM รองรับตาม codec ของเบราว์เซอร์ MP4 อัตราเฟรมคงที่ใช้ timing จริง ส่วนคลิป VFR/ไม่มี timing ใช้การสุ่มตามเวลา จำกัดไฟล์ 500 MB ประสิทธิภาพขึ้นกับเครื่องและความละเอียดคลิป
+
+ตรวจสูตรด้วย test_browser_port.py เพื่อสร้าง fixture จาก dataset/ผล Python แล้วรัน `node test_browser_port.cjs` ไฟล์ทดสอบส่วนตัวและ dataset ไม่ถูก commit
+
+## เอกสารรุ่น Python เดิม
+
+ไฟล์ backend และรายงานเดิมยังเก็บไว้สำหรับอ้างอิง ไม่ถูกเรียกโดยหน้า Version 2 คำแนะนำด้านล่างใช้กับรุ่นเก่าเท่านั้น
+
+---
+
 # เว็บวิเคราะห์การยกของ · เวอร์ชัน 1.2
 
 Backend สำหรับ Deploy: ดู DEPLOY_BACKEND.md ใช้ requirements-server.txt, serve.py และ Dockerfile พร้อมรหัสเข้าใช้, CORS, ลิงก์ผลลัพธ์แบบลงลายเซ็น และคิวจำกัดจำนวนงาน

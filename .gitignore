@@ -53,3 +53,10 @@ Desktop.ini
 node_modules/
 dist/
 build/
+
+# Temporary browser-port build downloads and private test reference data
+/browser-sdk/
+/browser-sdk.tgz
+/browser-package.json
+/opencv-browser.js
+/browser-port-fixture.json

@@ -1,0 +1,5 @@
+let detector,index=0,w,h;
+const send=self.postMessage.bind(self);
+self.onmessage=async({data})=>{try{if(data.type==='init'){send({type:'phase',message:'กำลังโหลด MediaPipe WebAssembly'});const {FilesetResolver,PoseLandmarker}=await import('./runtime/vision_bundle.mjs');const files=await FilesetResolver.forVisionTasks(new URL('./runtime/wasm',self.location).href);({w,h}=data);detector=await PoseLandmarker.createFromOptions(files,{canvas:new OffscreenCanvas(w,h),baseOptions:{modelAssetPath:new URL('./runtime/pose_landmarker_lite.task',self.location).href,delegate:'CPU'},runningMode:'VIDEO',numPoses:1});index=0;send({type:'ready'});return;}
+ if(data.type==='frame'){let result;try{result=detector.detectForVideo(data.bitmap,data.timestamp);}finally{data.bitmap.close();}let l=result.landmarks[0],g=result.worldLandmarks[0];send({type:'landmarks',xy:Array.from({length:33},(_,i)=>l?[l[i].x*w,l[i].y*h]:[NaN,NaN]),world:Array.from({length:33},(_,i)=>g?[g[i].x,g[i].y,g[i].z]:[NaN,NaN,NaN]),confidence:Array.from({length:33},(_,i)=>l?Math.min(l[i].visibility??1,l[i].presence??1):NaN)});}}
+ catch(e){send({type:'error',message:e.message||String(e)});}};
