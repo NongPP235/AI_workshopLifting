@@ -5,7 +5,7 @@ for stream in (sys.stdout, sys.stderr):
 from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / 'vendor'))
-import json, threading, uuid, subprocess, traceback, shutil, re
+import json, threading, uuid, subprocess, traceback, shutil, re, os
 from flask import Flask, request, jsonify, send_from_directory
 import numpy as np
 import model
@@ -20,6 +20,7 @@ model.find_peaks = find_peaks
 app = Flask(__name__, static_folder='static', static_url_path='')
 app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+allowed_origins = {origin.strip() for origin in os.environ.get('ALLOWED_ORIGINS','').split(',') if origin.strip()}
 DATA = ROOT / 'data'
 DATA.mkdir(exist_ok=True)
 model.POSE_MODEL_PATH = ROOT / 'models' / 'pose_landmarker_lite.task'
@@ -55,6 +56,12 @@ def index():
 
 @app.after_request
 def cache_control(response):
+    origin = request.headers.get('Origin')
+    if origin in allowed_origins:
+        response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Range'
+        response.vary.add('Origin')
     if request.path.startswith('/api/') or request.path in {'/','/app.js','/style.css'}:
         response.headers['Cache-Control'] = 'no-store'
     return response
@@ -169,7 +176,7 @@ def files(job_id,name):
     if job_id not in jobs or name not in {'result.mp4','results.csv'}: return '',404
     if jobs[job_id]['status'] != 'done':
         return jsonify(error='ผลลัพธ์ยังไม่พร้อมดาวน์โหลด'),409
-    return send_from_directory(DATA / job_id, name, as_attachment=name.endswith('.csv'))
+    return send_from_directory(DATA / job_id, name, as_attachment=name.endswith('.csv') or request.args.get('download')=='1')
 
 if __name__ == '__main__':
     app.run(host='127.0.0.1', port=8000, threaded=True)
