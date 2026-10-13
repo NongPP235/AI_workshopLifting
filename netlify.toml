@@ -1,0 +1,5 @@
+[build]
+  base = "static"
+  publish = "."
+
+# Frontend only. The Python analysis API must be deployed separately.
