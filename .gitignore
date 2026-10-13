@@ -1,0 +1,55 @@
+# Python dependencies and virtual environments
+vendor/
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local uploads, datasets, downloaded models, and generated media
+data/
+dataset_for_test/
+Dataset_for_test/
+models/
+test-assets/
+*.mp4
+*.mov
+*.avi
+*.webm
+/*.jpg
+/*.png
+
+# Generated test output (keep test scripts and Markdown reports)
+*.log
+/test-report*.json
+/critical-flow-results.json
+/deployment-audit.json
+/count-regression.csv
+/dataset-results.csv
+/noto-font-source.css
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.codex/
+.agents/
+
+# Editor, OS, and deployment caches
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
+.netlify/
+node_modules/
+dist/
+build/
