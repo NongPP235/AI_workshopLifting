@@ -8,6 +8,8 @@ sys.path.insert(0, str(ROOT / 'vendor'))
 import json, threading, uuid, subprocess, traceback, shutil, re, os
 from flask import Flask, request, jsonify, send_from_directory
 import numpy as np
+import hmac
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 import model
 import imageio_ffmpeg
 import matplotlib
@@ -21,11 +23,36 @@ app = Flask(__name__, static_folder='static', static_url_path='')
 app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 allowed_origins = {origin.strip() for origin in os.environ.get('ALLOWED_ORIGINS','').split(',') if origin.strip()}
-DATA = ROOT / 'data'
-DATA.mkdir(exist_ok=True)
-model.POSE_MODEL_PATH = ROOT / 'models' / 'pose_landmarker_lite.task'
+access_key = os.environ.get('API_ACCESS_KEY','')
+signer = URLSafeTimedSerializer(access_key, salt='lifting-files') if access_key else None
+
+@app.before_request
+def authorize():
+    if not access_key or not request.path.startswith(('/api/','/files/')):
+        return None
+    provided = request.headers.get('Authorization','').removeprefix('Bearer ')
+    if hmac.compare_digest(provided.encode(),access_key.encode()):
+        return None
+    if request.method == 'OPTIONS':
+        return None
+    if request.path.startswith('/files/'):
+        try:
+            if signer.loads(request.args.get('token',''),max_age=3600) == request.path:
+                return None
+        except (BadSignature,SignatureExpired):
+            pass
+    return jsonify(error='กรอกรหัสเข้าใช้ backend ที่ถูกต้อง'),401
+DATA = Path(os.environ.get('DATA_DIR',str(ROOT / 'data')))
+DATA.mkdir(parents=True,exist_ok=True)
+model.POSE_MODEL_PATH = Path(os.environ.get('POSE_MODEL_PATH',str(ROOT / 'models' / 'pose_landmarker_lite.task')))
 jobs = {}
 lock = threading.Lock()
+admission = threading.BoundedSemaphore(int(os.environ.get('MAX_PENDING_JOBS','3')))
+def enqueue(job_id,path,height):
+    try:
+        process(job_id,path,height)
+    finally:
+        admission.release()
 HEIGHTS = {'01':165, '02':183, '03':180, '04':178, '05':173}
 dataset = sorted((ROOT / 'dataset_for_test').rglob('*.mp4'))
 def normalize_job(job):
@@ -54,13 +81,18 @@ for metadata in DATA.glob('*/job.json'):
 def index():
     return app.send_static_file('index.html')
 
+@app.get('/health')
+def health():
+    ready=model.POSE_MODEL_PATH.is_file()
+    return jsonify(status='ok' if ready else 'not_ready',model_ready=ready),200 if ready else 503
+
 @app.after_request
 def cache_control(response):
     origin = request.headers.get('Origin')
     if origin in allowed_origins:
         response.headers['Access-Control-Allow-Origin'] = origin
         response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Range'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Range, Authorization'
         response.vary.add('Origin')
     if request.path.startswith('/api/') or request.path in {'/','/app.js','/style.css'}:
         response.headers['Cache-Control'] = 'no-store'
@@ -125,14 +157,20 @@ def analyze():
         return jsonify(error='เลือกวิดีโอ MP4, MOV, AVI หรือ WebM'), 400
     if not model.POSE_MODEL_PATH.exists():
         return jsonify(error='ยังไม่มีโมเดล MediaPipe กรุณารัน setup.ps1'), 503
+    if not admission.acquire(blocking=False):
+        return jsonify(error='คิวเต็ม กรุณาลองใหม่ภายหลัง'),429
     job_id = uuid.uuid4().hex
     folder = DATA / job_id
-    folder.mkdir()
     path = folder / ('input' + Path(upload.filename).suffix.lower())
-    upload.save(path)
-    jobs[job_id] = {'status':'queued', 'filename':upload.filename, 'height':height}
-    save_job(job_id)
-    threading.Thread(target=process, args=(job_id,path,height), daemon=True).start()
+    try:
+        folder.mkdir()
+        upload.save(path)
+        jobs[job_id] = {'status':'queued', 'filename':upload.filename, 'height':height}
+        save_job(job_id)
+        threading.Thread(target=enqueue, args=(job_id,path,height), daemon=True).start()
+    except Exception:
+        admission.release()
+        raise
     return jsonify(id=job_id), 202
 
 @app.get('/api/dataset')
@@ -156,20 +194,33 @@ def analyze_dataset():
         return jsonify(error='เลือกคลิปทดสอบและส่วนสูงที่ถูกต้อง'),400
     if not model.POSE_MODEL_PATH.exists():
         return jsonify(error='ไม่พบโมเดล MediaPipe'),503
+    if not admission.acquire(blocking=False):
+        return jsonify(error='คิวเต็ม กรุณาลองใหม่ภายหลัง'),429
     job_id = uuid.uuid4().hex
     folder = DATA / job_id
-    folder.mkdir()
     source = dataset[index]
     path = folder / 'input.mp4'
-    shutil.copyfile(source,path)
-    jobs[job_id] = {'status':'queued','filename':source.name, 'height':height}
-    save_job(job_id)
-    threading.Thread(target=process,args=(job_id,path,height),daemon=True).start()
+    try:
+        folder.mkdir()
+        shutil.copyfile(source,path)
+        jobs[job_id] = {'status':'queued','filename':source.name, 'height':height}
+        save_job(job_id)
+        threading.Thread(target=enqueue,args=(job_id,path,height),daemon=True).start()
+    except Exception:
+        admission.release()
+        raise
     return jsonify(id=job_id),202
 
 @app.get('/api/jobs/<job_id>')
 def status(job_id):
-    return jsonify(normalize_job(jobs[job_id])) if job_id in jobs else (jsonify(error='ไม่พบงาน'),404)
+    if job_id not in jobs:
+        return jsonify(error='ไม่พบงาน'),404
+    job = json.loads(json.dumps(normalize_job(jobs[job_id])))
+    if signer and job.get('result'):
+        for key in ('video','csv'):
+            path=job['result'][key].split('?')[0]
+            job['result'][key]=path+'?token='+signer.dumps(path)
+    return jsonify(job)
 
 @app.get('/files/<job_id>/<name>')
 def files(job_id,name):

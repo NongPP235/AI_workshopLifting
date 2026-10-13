@@ -1,5 +1,7 @@
 # เว็บวิเคราะห์การยกของ · เวอร์ชัน 1.2
 
+Backend สำหรับ Deploy: ดู DEPLOY_BACKEND.md ใช้ requirements-server.txt, serve.py และ Dockerfile พร้อมรหัสเข้าใช้, CORS, ลิงก์ผลลัพธ์แบบลงลายเซ็น และคิวจำกัดจำนวนงาน
+
 รัน `./start.ps1` แล้วเปิด http://127.0.0.1:8000
 เครื่องอื่นให้ติดตั้ง Python 3.12 และรัน `./setup.ps1` ก่อน
 

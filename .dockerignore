@@ -1,0 +1,15 @@
+.git
+.env
+.env.*
+vendor
+.venv
+data
+dataset_for_test
+models
+__pycache__
+test-assets
+*.log
+*.mp4
+*.csv
+*.jpg
+test-report*.json
